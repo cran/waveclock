@@ -12,51 +12,72 @@ the modal frequencies are identified from the time-frequency decomposition
 using the "crazy climbers" algorithm from package \pkg{Rwave}.
 }
 \usage{
-waveclock( x, period = c( 6, 48 ), time.limits = NULL, reflect = TRUE,
-noctave = floor( log2( length( x ) ) ), nvoice = 96,
+waveclock( x, period = c( 6, 48 ), time.limits = NULL, extend = "reflect",
+noctave = NULL, nvoice = 96, mask.coi = TRUE,
 crc.args = list( seed = 0, nbclimb = 50 ),
 cfamily.args = list( ptile = 0.005, bstep = 5, nbchain = 400 ),
 crcrec.args = list( compr = 3, epsilon = 0, para = 3, plot = FALSE ),
-xlab = "Time (h)", ylab = "Period (h)", jpg = NULL, ... )
+xlab = "Time (h)", ylab = "Period (h)", png = NULL,
+color.palette = heat.colors, mode.col = "green", mode.lty = "solid",
+mode.lwd = 2, ... )
 }
 \arguments{
 \item{x}{
-Input signal (possibly complex-valued)
+Numeric or complex vector or time series. Input signal (possibly complex-valued).
 }
 \item{period}{
-Range defining lower and upper period limits. The default values may be
+Numeric vector. Range defining lower and upper period limits. The default values may be
 useful for detecting circadian rhythmicity in data with time units measured
 in hours
 }
 \item{time.limits}{
-Time range for truncation of series
+Numeric vector. Time range for truncation of series
 }
-\item{reflect}{
-Smooths end effects by reflecting data series at time limits
+\item{extend}{
+NULL or character string. Ameliorate edge effects by reflecting data series at time
+limits or repeating the time series. Must be NULL or an abbreviation of
+"reflect" or "repeat".
+}
+\item{mask.coi}{
+Logical. Is the "cone of influence" masked from the output?
 }
 \item{noctave}{
-Number of powers of 2 for the scale variable in the wavelet decomposition
+Numeric. Number of powers of 2 for the scale variable in the wavelet decomposition.
+Defaults to the maximum number possible
 }
 \item{nvoice}{
-Number of scales in each octave (i.e., between two consecutive powers of 2)
+Numeric. Number of scales in each octave (i.e., between two consecutive powers of 2)
 }
 \item{crc.args}{
-Arguments provided to "crazy climbers" function \code{\link[Rwave]{crc}}
+List. Arguments provided to "crazy climbers" function \code{\link[Rwave]{crc}}
 }
 \item{cfamily.args}{
-Arguments provided to chaining function \code{\link[Rwave]{cfamily}}
+List. Arguments provided to chaining function \code{\link[Rwave]{cfamily}}
 }
 \item{crcrec.args}{
-Arguments provided to modal frequency reconstruction function \code{\link[Rwave]{crcrec}}
+List. Arguments provided to modal frequency reconstruction function \code{\link[Rwave]{crcrec}}
 }
 \item{xlab}{
-x axis label for plot of continuous wavelet transform scalogram
+Character string. x axis label for plot of continuous wavelet transform scalogram
 }
 \item{ylab}{
-y axis label for plot of continuous wavelet transform scalogram
+Character string. y axis label for plot of continuous wavelet transform scalogram
 }
-\item{jpg}{
-Name of jpg filename for plot output. The default plots to the default device
+\item{png}{
+NULL (default) or character string. Name of png filename for plot output.
+The default value plots to the default device
+}
+\item{color.palette}{
+Color palette function used in scalogram plot
+}
+\item{mode.col}{
+Color of line marking modal frequency
+}
+\item{mode.lty}{
+Type of line marking modal frequency
+}
+\item{mode.lwd}{
+Width of line marking modal frequency
 }
 \item{...}{
 Additional parameters passed to \code{\link[graphics]{filled.contour}} plot function
@@ -83,8 +104,7 @@ Output of procedure to remove short discontinuities in the modal frequencies
 \item{modes}{
 Matrix containing information about the modal frequencies.
 The first column gives an index for the modal frequency
-that corresponds to the row number in cfamily\$chain and the column number
-in the reconstructed signal and mask.
+that corresponds to the row number in cfamily\$chain.
 The next three columns identify the median voice of the modal signal,
 excluding the \emph{cone of influence} (region subject to edge effects).
 Each voice corresponds to a range of periods: columns 2, 3, and 4 give
@@ -101,9 +121,17 @@ as in the example.
 \item{rec}{
 Modal frequencies reconstructed as time series.
 }
+\item{amp}{
+The instantaneous amplitude of the modes as measured by Morlet wavelet
+coefficients, or 0 outside the cone of influence; NA within the cone of influence.
+}
+\item{per}{
+The instantaneous period of the modes, as measured by the logarithmic
+midpoint of the wavelet scale, or 0 outside the cone of influence; NA within the cone of influence.
+}
 \item{mask}{
-Voice numbers for the modal frequencies, or 0 within the cone of influence;
-NA elsewhere.
+Voice numbers for the modal frequencies, or 0 outside the cone of influence;
+NA within the cone of influence.
 }
 }
 \references{
@@ -122,14 +150,14 @@ frequencies from the continuous wavelet transform,
 instance of R.
 }
 \examples{
-set.seed( 0 )
+set.seed( 1 )
 freq <- 6 # data point every 10 minutes
 T <- 24 * 5 * freq
 t <- ( 0:T ) / freq
 
 # models an initial 'spike' and slow background trend
 spike <- 0.5 * dgamma( t / 24, 2, 10 )
-trend <- 5 * poly( t, 2 ) %*% rnorm( 2 )
+trend <- rowSums( poly( t, 2 ) \%*\% rnorm( 2 ) )
 background <- spike + trend
 
 # exponentially damped circadian signal with random phase
@@ -142,17 +170,17 @@ signal <- amplitude * sin( t / period * 2 * pi + phase )
 noise <- 0.15 * rnorm( T + 1 )
 
 # simulated luminescence trace
-trace <- ts( signal + background + noise, start = 0, freq = freq )
-plot( trace )
+luminescence.trace <- ts( signal + background + noise, start = 0, freq = freq )
+plot( luminescence.trace )
 
 # wavelet analysis
-result <- waveclock( trace )
+result <- waveclock( luminescence.trace )
 result$modes
 reconstructed.trace <- ts( rowSums( result$rec, na.rm = TRUE ), start = 0, freq = freq )
 
 # plot reconstructed wave
 # code not run
-##plot( trace )
+##plot( luminescence.trace )
 ##lines( reconstructed.trace, col = 2 )
 ##abline( h = 0, lty = 2, col = 2 )
 }

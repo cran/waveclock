@@ -1,6 +1,6 @@
 Package: waveclock
-Version: 1.0-0
-Date: 2008-06-16
+Version: 1.0-1
+Date: 2008-07-11
 Title: Time-frequency analysis of cycling cell luminescence data
 Author: Tom Price <t0mpr1c3@gmail.com>
 Maintainer: Tom Price <t0mpr1c3@gmail.com>
@@ -14,4 +14,4 @@ Description: waveclock is an R function designed to assess the period and
   Torresani, Academic Press, 1998.
 License: GPL version 2 or newer
 URL: http://sgdp.iop.kcl.ac.uk/tprice/software.html
-Packaged: Mon Jun 16 09:17:54 2008; spjgtsp
+Packaged: Fri Jul 11 14:11:12 2008; spjgtsp

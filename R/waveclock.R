@@ -10,9 +10,11 @@
 #   x              time series data (class = "ts")
 #   period         range defining lower and upper period limits
 #   time.limits    time range for truncation of series
-#   reflect        smooths end effects by reflecting data series at time limits
+#   extend         ameliorates edge effects by reflecting data series at time limits (extend="reflect")
+#                    or repeating time series (extend="repeat")
 #   noctave        number of octaves ( default = floor( log2( length( x ) ) ) )
 #   nvoice         number of voices per octave ( default = 96 )
+#   mask.coi       mask "cone of influence" from output
 #   crc.args       list of arguments for crazy climbers algorithm. Defaults:
 #     seed = 0       seed for random number generator
 #     nbclimb = 50   number of crazy climbers
@@ -26,28 +28,37 @@
 #     para = 3       scale parameter for extrapolating the ridges
 #   xlab           x axis label for plot of cwt scalogram
 #   ylab           y axis label for plot of cwt scalogram
-#   jpg            name of jpg filename for plot output
+#   png            name of png filename for plot output
+#   color.palette  color palette used in scalogram plot
+#   mode.col       color of line marking modal frequency
+#   mode.lty       type of line marking modal frequency
+#   mode.lwd       width of line marking modal frequency
 #   ...            additional parameters passed to filled.contour plot function
 #
 # function clockwave gives the following output:
 #   cwt          continuous wavelet transform
 #   crc          crazy climber output
 #   cfamily      output of procedure to find ridges (chains) in crazy climber output
-#   rec          reconstruction of signal from ridges
 #   modes        modes of signal corresponding to reconstructed ridges:
 #                  index     which ridge, corresponding to row of cfamily$chain
 #                  median    median of modal signal, excluding cone of influence
 #                  mean      mean of modal signal, excluding cone of influence
+#   rec          reconstruction of signal from ridges
+#   amp          estimated instantaneous amplitudes of modes
+#   per          estimated instantaneous periods of modes
+#   mask         mask indicating boundaries of "cone of influence" for modes
+#
+#
 #
 waveclock <-
 function(
   x,
   period = c( 6, 48 ),
-  ##phase = c( 0 ),
   time.limits = NULL,
-  reflect = TRUE,
-  noctave = floor( log2( length( x ) ) ),
+  extend = "reflect",
+  noctave = NULL,
   nvoice = 96,
+  mask.coi = TRUE,
   crc.args = list(
     seed = 0,
     nbclimb = 50
@@ -65,21 +76,36 @@ function(
   ),
   xlab = 'Time (h)',
   ylab = 'Period (h)',
-  jpg = NULL,
+  png = NULL,
+  color.palette = heat.colors,
+  mode.col = "green",
+  mode.lty = "solid",
+  mode.lwd = 2,
   ...
 )
 {
+  extend <- pmatch( extend, c( "reflect", "repeat" ) )
   do.reflect <-
-  function( ts )
+  function( x )
   {
-    dt <- deltat( ts )
-    mt <- max( time( ts ) )
-    ts <- as.matrix( ts )
-    d <- dim( ts )[ 1 ]
-    z <- 2^ceiling( log2( d ) ) * 2
-    zeros <- ts( matrix( 0, nr = z - d, nc = dim( ts )[ 2 ] ), deltat = dt )
-    ts <- rbind( ts[ d:2, , drop = FALSE ], ts, ts[ ( d - 1 ):1, , drop = FALSE ] )
-    return( ts( ts, deltat = dt, start = -mt ) )
+    dt <- deltat( x )
+    rt <- range( time( x ) )
+    x <- as.matrix( x )
+    d <- dim( x )[ 1 ]
+    ##z <- 2^ceiling( log2( d ) ) * 2
+    ##zeros <- ts( matrix( 0, nr = z - d, nc = dim( x )[ 2 ] ), deltat = dt )
+    x <- rbind( x[ d:2, , drop = FALSE ], x, x[ ( d - 1 ):1, , drop = FALSE ] )
+    return( ts( x, deltat = dt, start = rt[ 1 ] - rt[ 2 ] ) )
+  }
+  do.repeat <-
+  function( x )
+  {
+    dt <- deltat( x )
+    rt <- range( time( x ) )
+    x <- as.matrix( x )
+    d <- dim( x )[ 1 ]
+    x <- rbind( x, x, x )
+    return( ts( x, deltat = dt, start = rt[ 1 ] - rt[ 2 ] - 1 ) )
   }
   orig <- x
   if ( class( x ) != "ts" )
@@ -105,33 +131,40 @@ function(
   }
 
   # first time point = time.limits[ 1 ]
-  x <- ts( x[ time( x ) >= time.limits[ 1 ] & time( x ) <= time.limits[ 2 ] ], deltat = dt, start = 0 )
+  x <- ts( as.matrix( x[ time( x ) >= time.limits[ 1 ] & time( x ) <= time.limits[ 2 ] ] ), deltat = dt, start = 0 )
 
   N    <- length( x )
   T    <- dt * N
   s0   <- dt * 2
+
+  # do this before extending the series rather than after
+  if ( is.null( noctave ) )
+  {
+    noctave <- floor( log2( length( x ) ) )
+  }
   noct <- noctave
 
-  # reflect x at time = time.limits[ 1 ]
-  if( reflect )
+  # reflect x at ends of time series
+  if( length( extend ) && extend == 1 )
   {
     x <- do.reflect( x )
   }
+  # or repeat series
+  else if( length( extend ) && extend == 2 )
+  {
+    x <- do.repeat( x )
+  }
 
   # continuous wavelet transform
-  t1 <- do.call( "cwt", list( input = x, noctave = noctave, nvoice = nvoice, w0 = 6.203608, plot = FALSE ) )
+  t1 <- do.call( "cwt", list( input = x, noctave = noct, nvoice = nvoice, w0 = 6.203608, plot = FALSE ) )
 
   # ridge reconstruction
   if ( !is.null( crc.args$seed ) )
   {
     set.seed( crc.args$seed )
   }
-  if ( !is.null( dev.list() ) )
-  {
-    dev.off()
-  }
   crc.args$tfrep <- t1
-  c1 <- do.call( "crc", crc.args )
+  c1 <- do.call( "my.crc", crc.args )
   cfamily.args$ccridge <- c1
   f1 <- do.call( "cfamily", cfamily.args )
   crcrec.args$siginput <- x
@@ -156,16 +189,16 @@ function(
   noct <- log2( p2 ) - log2( p1 )
   o    <- 0.5 / nvoice # offset on plot
   lt   <- unique( ( time( x )[ time( x ) >= 0 & time( x ) <= diff( time.limits ) ] + time.limits[ 1 ] ) %/% 12 ) * 12
-  lp   <- c( 48, 24, 12, 6 )
-  p    <- ( log2( lp ) - log2( p1 ) + 0 ) / ( noct + 1 / nvoice )
-  bt   <- 1 / time.limits[ 2 ]
+  lp   <- c( 48, 24, 12, 6, 3, 1.5, 0.75 )
+  pp   <- ( log2( lp ) - log2( p1 ) + 0 ) / ( noct + 1 / nvoice )
+  bt   <- 1 / diff( time.limits )
   at   <- 0
   Keps <- 1000 * .Machine$double.eps
 
   # plot
-  if ( !is.null( jpg ) )
+  if ( !is.null( png ) )
   {
-    jpeg( paste( jpg, "jpg", sep = "." ) )
+    png( paste( png, "png", sep = "." ) )
   }
   filled.contour(
     Mod( t1 )[ time( x ) >= 0 & time( x ) <= diff( time.limits ), y[ s1:s2 ] ],
@@ -174,7 +207,7 @@ function(
     plot.axes =
     {
       axis( 1, at + bt * ( lt - time.limits[ 1 ] ), lab = lt )
-      axis( 2, p, lab = lp )
+      axis( 2, pp, lab = lp )
 
       # circadian period
       scale.24h <- ( log2( 24 ) - log2( p1 ) + 0 ) / ( noct + 1 / nvoice )
@@ -182,25 +215,30 @@ function(
 
       # cone of influence
       s <- 2 ^ seq( 0, noct, 0.5 / nvoice ) * p1                            # scales ( = period, since fourier factor = 1 )
-      cy1 <- ( log2( s ) - log2( p1 ) + o ) / ( noct + 1 / nvoice )
-      cx1 <- sqrt( 2 ) * s / T
-      sel1 <- ( cx1 < 1 / 2 )
-      cy2 <- cy1
-      cx2 <- 1 - cx1
-      sel2 <- ( cx2 > 1 / 2 )
-      ox <- sqrt( 2 ) * 2^( log2( p1 ) - o ) / T
-      cx <- c( cx1[ sel1 ], 0.5, cx2[ sel2 ] )
-      cy <- c( cy1[ sel1 ], ( log2( T ) - log2( p1 ) - 1.5 + o ) / ( noct + 1 / nvoice ), cy2[ sel2 ] )
-      ord <- order( cx )
-      cx <- cx[ ord ]
-      cy <- cy[ ord ]
-      lines( cx, cy )
-      polygon( c( 0, 0, ox, cx, 1 - ox, 1, 1 ), c( 1, 0, 0, cy, 0, 0, 1 ), density = 5, angle = -45 )
-      polygon( c( 0, 0, ox, cx, 1 - ox, 1, 1 ), c( 1, 0, 0, cy, 0, 0, 1 ), density = 5, angle =  45 )
+      if ( mask.coi )
+      {
+        cy1 <- ( log2( s ) - log2( p1 ) + o ) / ( noct + 1 / nvoice )
+        cx1 <- sqrt( 2 ) * s / T
+        sel1 <- ( cx1 < 1 / 2 )
+        cy2 <- cy1
+        cx2 <- 1 - cx1
+        sel2 <- ( cx2 > 1 / 2 )
+        ox <- sqrt( 2 ) * 2^( log2( p1 ) - o ) / T
+        cx <- c( cx1[ sel1 ], 0.5, cx2[ sel2 ] )
+        cy <- c( cy1[ sel1 ], ( log2( T ) - log2( p1 ) - 1.5 + o ) / ( noct + 1 / nvoice ), cy2[ sel2 ] )
+        ord <- order( cx )
+        cx <- cx[ ord ]
+        cy <- cy[ ord ]
+        lines( cx, cy )
+        polygon( c( 0, 0, ox, cx, 1 - ox, 1, 1 ), c( 1, 0, 0, cy, 0, 0, 1 ), density = 5, angle = -45 )
+        polygon( c( 0, 0, ox, cx, 1 - ox, 1, 1 ), c( 1, 0, 0, cy, 0, 0, 1 ), density = 5, angle =  45 )
+      }
 
       # draw ridges
       chains <- r1$idx[ r1$idx > 0 ]
       rec <- matrix( NA, nc = max( c( 0, chains ) ), nr = N )
+      amp <- matrix( NA, nc = max( c( 0, chains ) ), nr = N )
+      per <- matrix( NA, nc = max( c( 0, chains ) ), nr = N )
       mask <- matrix( NA, nc = max( c( 0, chains ) ), nr = N )
       modes <- matrix( NA, nr = max( c( 0, chains + 1 ) ), nc = 8 )
       colnames( modes ) <- c(
@@ -247,15 +285,17 @@ function(
             lines(
               x = c( x2, x2, x2 + 1 / d1 ),
               y = c( oy, y2, y2 ),
-              col = 3,
-              lty = "solid",
-              lwd = 2
+              col = mode.col,
+              lty = mode.lty,
+              lwd = mode.lwd
             )
             oy <- y2
-            if ( !is.na( coi ) && coi )
+            if ( ( !mask.coi && tsel[ x1[ i ] ] ) || ( !is.na( coi ) && coi ) )
             {
               m <- c( m, y1[ i ] )
-              mask[ x1[ i ] - t0 + 1, j ] <- y1[ i ]
+              mask[ x1[ i ] - t0, j ] <- y1[ i ]
+              amp[ x1[ i ] - t0, j ] <- o1[ x1[ i ], y1[ i ] ]
+              per[ x1[ i ] - t0, j ] <- p[ y1[ i ] ]
             }
           }
         }
@@ -267,9 +307,11 @@ function(
           {
             x2 <- ( x1 - 1 ) / d1
             coi <- ( x2 >= sqrt( 2 ) * 2 ^ ( ( y1 - s1 ) / nvoice ) * p1 / T ) && ( ( 1 - x2 ) >= sqrt( 2 ) * 2 ^ ( ( y1 - s1 ) / nvoice ) * p1 / T )
-            if( is.na( mask[ x1, j ] ) && !is.na( coi ) && coi )
+            if( !mask.coi || ( is.na( mask[ x1, j ] ) && !is.na( coi ) && coi ) )
             {
               mask[ x1, j ] <- 0
+              amp[ x1, j ] <- 0
+              per[ x1, j ] <- 0
             }
           }
         }
@@ -280,9 +322,11 @@ function(
           {
             x2 <- ( x1 - 1 ) / d1
             coi <- ( x2 >= sqrt( 2 ) * 2 ^ ( ( y1 - s1 ) / nvoice ) * p1 / T ) && ( ( 1 - x2 ) >= sqrt( 2 ) * 2 ^ ( ( y1 - s1 ) / nvoice ) * p1 / T )
-            if( is.na( mask[ x1, j ] ) && !is.na( coi ) && coi )
+            if( !mask.coi || ( is.na( mask[ x1, j ] ) && !is.na( coi ) && coi ) )
             {
               mask[ x1, j ] <- 0
+              amp[ x1, j ] <- 0
+              per[ x1, j ] <- 0
             }
           }
         }
@@ -336,19 +380,24 @@ function(
       o1 <- o1[ time( x ) >= 0, y[ s1:s2 ] ]
       if ( !is.null( modes ) )
       {
-        rec <- ts( rec[ , !is.na( modes[ , 1 ] )[ seq( dim( modes )[ 1 ] - 1 ) ], drop = FALSE ], deltat = dt, start = time.limits[ 1 ] )
-        mask <- ts( mask[ , !is.na( modes[ , 1 ] )[ seq( dim( modes )[ 1 ] - 1 ) ], drop = FALSE ], deltat = dt, start = time.limits[ 1 ] )
+        sel <- as.numeric( modes[ , 1 ][ seq( dim( modes )[ 1 ] - 1 ) ] )
+        rec <- ts( rec[ , sel, drop = FALSE ], deltat = dt, start = time.limits[ 1 ] )
+        amp <- ts( amp[ , sel, drop = FALSE ], deltat = dt, start = time.limits[ 1 ] )
+        per <- ts( per[ , sel, drop = FALSE ], deltat = dt, start = time.limits[ 1 ] )
+        mask <- ts( mask[ , sel, drop = FALSE ], deltat = dt, start = time.limits[ 1 ] )
       }
       else
       {
         rec <- NULL
+        amp <- NULL
+        per <- NULL
         mask <- NULL
       }
     },
-    color.palette = heat.colors,
+    color.palette = color.palette,
     ...
   )
-  if ( !is.null( jpg ) )
+  if ( !is.null( png ) )
   {
     dev.off()
   }
@@ -363,6 +412,8 @@ function(
         crcrec = r1,
         modes = modes,
         rec = rec,
+        amp = amp,
+        per = per,
         mask = mask
       )
     )
