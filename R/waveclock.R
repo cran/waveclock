@@ -46,6 +46,7 @@
 #   rec          reconstruction of signal from ridges
 #   amp          estimated instantaneous amplitudes of modes
 #   per          estimated instantaneous periods of modes
+#   phase        estimated instantaneous phase of modes
 #   mask         mask indicating boundaries of "cone of influence" for modes
 #
 #
@@ -239,6 +240,7 @@ function(
       rec <- matrix( NA, nc = max( c( 0, chains ) ), nr = N )
       amp <- matrix( NA, nc = max( c( 0, chains ) ), nr = N )
       per <- matrix( NA, nc = max( c( 0, chains ) ), nr = N )
+      phase <- matrix( NA, nc = max( c( 0, chains ) ), nr = N )
       mask <- matrix( NA, nc = max( c( 0, chains ) ), nr = N )
       modes <- matrix( NA, nr = max( c( 0, chains + 1 ) ), nc = 8 )
       colnames( modes ) <- c(
@@ -251,13 +253,6 @@ function(
         "mean (upper limit)",
         "var"
       )
-      ##mode.phase <- matrix( NA, nr = max( c( 0, chains + 1 ) ), nc = length( phase ) + 1 )
-      ##colnames( mode.phase ) <- c(
-      ##  "index",
-      ##  phase
-      ##)
-      o1 <- r1$ordered
-      o1[] <- 0
       tsel <- time( x ) >= -Keps & time( x ) <= diff( time.limits ) + Keps
       d1 <- sum( tsel )
       d2 <- s2 - s1 + 1
@@ -274,7 +269,6 @@ function(
           rec[ , j ] <- r1$comp[ j, tsel ]
           for( i in 1:length( x1 ) )
           {
-            o1[ x1[ i ], y1[ i ] ] <- Mod( t1[ x1[ i ], y1[ i ] ] )
             x2 <- ( x1[ i ] - t0 ) / d1
             y2 <- ( y1[ i ] - s1 ) / d2 + o / ( noct + 1 / nvoice )
             if ( is.na( oy ) )
@@ -294,8 +288,9 @@ function(
             {
               m <- c( m, y1[ i ] )
               mask[ x1[ i ] - t0, j ] <- y1[ i ]
-              amp[ x1[ i ] - t0, j ] <- o1[ x1[ i ], y1[ i ] ]
               per[ x1[ i ] - t0, j ] <- p[ y1[ i ] ]
+              amp[ x1[ i ] - t0, j ] <- Mod( t1[ x1[ i ], y1[ i ] ] )
+              phase[ x1[ i ] - t0, j ] <- Arg( t1[ x1[ i ], y1[ i ] ] )
             }
           }
         }
@@ -310,8 +305,9 @@ function(
             if( !mask.coi || ( is.na( mask[ x1, j ] ) && !is.na( coi ) && coi ) )
             {
               mask[ x1, j ] <- 0
-              amp[ x1, j ] <- 0
               per[ x1, j ] <- 0
+              amp[ x1, j ] <- 0
+              phase[ x1, j ] <- 0
             }
           }
         }
@@ -325,8 +321,9 @@ function(
             if( !mask.coi || ( is.na( mask[ x1, j ] ) && !is.na( coi ) && coi ) )
             {
               mask[ x1, j ] <- 0
-              amp[ x1, j ] <- 0
               per[ x1, j ] <- 0
+              amp[ x1, j ] <- 0
+              phase[ x1, j ] <- 0
             }
           }
         }
@@ -377,20 +374,21 @@ function(
       {
         modes <- NULL
       }
-      o1 <- o1[ time( x ) >= 0, y[ s1:s2 ] ]
       if ( !is.null( modes ) )
       {
         sel <- as.numeric( modes[ , 1 ][ seq( dim( modes )[ 1 ] - 1 ) ] )
         rec <- ts( rec[ , sel, drop = FALSE ], deltat = dt, start = time.limits[ 1 ] )
-        amp <- ts( amp[ , sel, drop = FALSE ], deltat = dt, start = time.limits[ 1 ] )
         per <- ts( per[ , sel, drop = FALSE ], deltat = dt, start = time.limits[ 1 ] )
+        amp <- ts( amp[ , sel, drop = FALSE ], deltat = dt, start = time.limits[ 1 ] )
+        phase <- ts( phase[ , sel, drop = FALSE ], deltat = dt, start = time.limits[ 1 ] )
         mask <- ts( mask[ , sel, drop = FALSE ], deltat = dt, start = time.limits[ 1 ] )
       }
       else
       {
         rec <- NULL
-        amp <- NULL
         per <- NULL
+        amp <- NULL
+        phase <- NULL
         mask <- NULL
       }
     },
@@ -412,8 +410,9 @@ function(
         crcrec = r1,
         modes = modes,
         rec = rec,
-        amp = amp,
         per = per,
+        amp = amp,
+        phase = phase,
         mask = mask
       )
     )

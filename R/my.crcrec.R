@@ -6,7 +6,7 @@
 # the original signal from 'ridges' (modal frequencies) in the continuous
 # wavelet decomposition.
 #
-# it is a slight alteration of the function crcrec in package Rwave-1.24
+# it is a slight alteration of the function crcrec in package Rwave-1.24-2
 #
 my.crcrec <-
 function (

@@ -8,3 +8,8 @@ o   New fields 'amp' and 'per' included in the output from waveclock()
 o   New data added: 'U2OS'
 o   New function added: 'my.crc'
 o   Modifications made to the documentation for waveclock()
+
+Version 1.0-2
+=============
+
+o   New field 'phase' included in the output from waveclock()

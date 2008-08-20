@@ -121,13 +121,17 @@ as in the example.
 \item{rec}{
 Modal frequencies reconstructed as time series.
 }
-\item{amp}{
-The instantaneous amplitude of the modes as measured by Morlet wavelet
-coefficients, or 0 outside the cone of influence; NA within the cone of influence.
-}
 \item{per}{
 The instantaneous period of the modes, as measured by the logarithmic
 midpoint of the wavelet scale, or 0 outside the cone of influence; NA within the cone of influence.
+}
+\item{amp}{
+The instantaneous amplitude of the modes as measured by the modulus of the Morlet wavelet
+at each time point, or 0 outside the cone of influence; NA within the cone of influence.
+}
+\item{phase}{
+The instantaneous phase of the modes, as measured by the argument of the Morlet wavelet
+at each time point, or 0 outside the cone of influence; NA within the cone of influence.
 }
 \item{mask}{
 Voice numbers for the modal frequencies, or 0 outside the cone of influence;
