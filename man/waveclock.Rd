@@ -84,6 +84,7 @@ Additional parameters passed to \code{\link[graphics]{filled.contour}} plot func
 }
 }
 \details{
+\describe{
 \item{original.signal}{
 Contains the original signal provided to the function.
 }
@@ -136,6 +137,7 @@ at each time point, or 0 outside the cone of influence; NA within the cone of in
 \item{mask}{
 Voice numbers for the modal frequencies, or 0 outside the cone of influence;
 NA within the cone of influence.
+}
 }
 }
 \references{

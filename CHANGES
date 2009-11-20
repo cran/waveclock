@@ -16,3 +16,9 @@ Version 1.0-3
 =============
 o   Contact details updated
 o   Recompiled under R 2.7.0 using Rtools28 from http://www.murdoch-sutherland.com/Rtools/
+
+Version 1.0-4
+==============
+o   Contact details updated
+o   Recompiled under R 2.10.0 using Rtools210 from http://www.murdoch-sutherland.com/Rtools/
+                     
